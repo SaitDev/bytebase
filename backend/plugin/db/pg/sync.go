@@ -270,6 +270,7 @@ SELECT nsp.nspname, rel.relname, con.conname, pg_get_constraintdef(con.oid, true
         WHERE contype = 'c' and ` + fmt.Sprintf(`nsp.nspname NOT IN (%s)
         AND nsp.nspname NOT LIKE 'pg_temp%%'
         AND nsp.nspname NOT LIKE 'pg_toast%%'
+        AND pg_catalog.has_schema_privilege(nsp.oid, 'USAGE')
         ORDER BY nsp.nspname, rel.relname, con.conname`, pgparser.SystemSchemaWhereClause)
 
 func getChecks(txn *sql.Tx) (map[db.TableKey][]*storepb.CheckConstraintMetadata, error) {
@@ -304,7 +305,8 @@ SELECT nsp.nspname, rel.relname, con.conname, pg_get_constraintdef(con.oid, true
         INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
         WHERE contype = 'x' and ` + fmt.Sprintf(`nsp.nspname NOT IN (%s)
         AND nsp.nspname NOT LIKE 'pg_temp%%'
-        AND nsp.nspname NOT LIKE 'pg_toast%%'`, pgparser.SystemSchemaWhereClause)
+        AND nsp.nspname NOT LIKE 'pg_toast%%'
+        AND pg_catalog.has_schema_privilege(nsp.oid, 'USAGE')`, pgparser.SystemSchemaWhereClause)
 
 func getExcludeConstraints(txn *sql.Tx) (map[db.TableKey][]*storepb.ExcludeConstraintMetadata, error) {
 	excludesMap := make(map[db.TableKey][]*storepb.ExcludeConstraintMetadata)
@@ -349,6 +351,7 @@ WHERE
 	n.nspname NOT IN(%s)
 	AND n.nspname NOT LIKE 'pg_temp%%'
 	AND n.nspname NOT LIKE 'pg_toast%%'
+	AND pg_catalog.has_schema_privilege(n.oid, 'USAGE')
 	AND c.contype = 'f'
 	AND c.conparentid = 0
 ORDER BY fk_schema, fk_table, fk_name;`, pgparser.SystemSchemaWhereClause)
@@ -478,6 +481,7 @@ FROM pg_catalog.pg_namespace
 WHERE nspname NOT IN (%s)
   AND nspname NOT LIKE 'pg_temp%%'
   AND nspname NOT LIKE 'pg_toast%%'
+  AND pg_catalog.has_schema_privilege(oid, 'USAGE')
 ORDER BY nspname;
 `, pgparser.SystemSchemaWhereClause)
 
@@ -539,7 +543,8 @@ func getListTableQuery(isAtLeastPG10 bool) string {
 	LEFT JOIN pg_class as pc ON pc.oid = format('%s.%s', quote_ident(tbl.schemaname), quote_ident(tbl.tablename))::regclass` + fmt.Sprintf(`
 	WHERE tbl.schemaname NOT IN (%s)
 	  AND tbl.schemaname NOT LIKE 'pg_temp%%'
-	  AND tbl.schemaname NOT LIKE 'pg_toast%%'%s
+	  AND tbl.schemaname NOT LIKE 'pg_toast%%'
+	  AND pg_catalog.has_schema_privilege(tbl.schemaname, 'USAGE')%s
 	ORDER BY tbl.schemaname, tbl.tablename;`, pgparser.SystemSchemaWhereClause, relisPartition)
 }
 
@@ -668,6 +673,7 @@ WHERE
 	AND n.nspname NOT IN (%s)
 	AND n.nspname NOT LIKE 'pg_temp%%'
 	AND n.nspname NOT LIKE 'pg_toast%%'
+	AND pg_catalog.has_schema_privilege(n.oid, 'USAGE')
 ORDER BY c.oid;`, pgparser.SystemSchemaWhereClause)
 
 func getTablePartitions(txn *sql.Tx, indexMap map[db.TableKey][]*storepb.IndexMetadata, checksMap map[db.TableKey][]*storepb.CheckConstraintMetadata, excludesMap map[db.TableKey][]*storepb.ExcludeConstraintMetadata) (map[db.TableKey][]*storepb.TablePartitionMetadata, error) {
@@ -785,6 +791,7 @@ FROM INFORMATION_SCHEMA.COLUMNS AS cols` + fmt.Sprintf(`
 WHERE cols.table_schema NOT IN (%s)
   AND cols.table_schema NOT LIKE 'pg_temp%%'
   AND cols.table_schema NOT LIKE 'pg_toast%%'
+  AND pg_catalog.has_schema_privilege(cols.table_schema, 'USAGE')
 ORDER BY cols.table_schema, cols.table_name, cols.ordinal_position;`, pgparser.SystemSchemaWhereClause)
 
 // getTableColumns gets the columns of a table.
@@ -887,6 +894,7 @@ FROM pg_catalog.pg_matviews
 WHERE schemaname NOT IN (%s)
   AND schemaname NOT LIKE 'pg_temp%%'
   AND schemaname NOT LIKE 'pg_toast%%'
+  AND pg_catalog.has_schema_privilege(schemaname, 'USAGE')
 ORDER BY schemaname, matviewname;`, pgparser.SystemSchemaWhereClause)
 
 func getMaterializedViews(txn *sql.Tx, indexMap map[db.TableKey][]*storepb.IndexMetadata, triggerMap map[db.TableKey][]*storepb.TriggerMetadata, extensionDepend map[int]bool) (map[string][]*storepb.MaterializedViewMetadata, map[int]*db.TableKey, error) {
@@ -953,6 +961,7 @@ FROM pg_catalog.pg_views
 WHERE schemaname NOT IN (%s)
   AND schemaname NOT LIKE 'pg_temp%%'
   AND schemaname NOT LIKE 'pg_toast%%'
+  AND pg_catalog.has_schema_privilege(schemaname, 'USAGE')
 ORDER BY schemaname, viewname;`, pgparser.SystemSchemaWhereClause)
 
 // getViews gets all views of a database.
@@ -1082,6 +1091,7 @@ func getRules(txn *sql.Tx) (map[db.TableKey][]*storepb.RuleMetadata, error) {
 		JOIN pg_namespace n ON n.oid = c.relnamespace
 		WHERE r.rulename NOT IN ('_RETURN', '_NOTHING')
 			AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+			AND pg_catalog.has_schema_privilege(n.oid, 'USAGE')
 		ORDER BY n.nspname, c.relname, r.rulename;`
 
 	rows, err := txn.Query(query)
@@ -1171,12 +1181,13 @@ func getEnumTypes(txn *sql.Tx, extensionDepend map[int]bool) (map[string][]*stor
 		pe.enumlabel as enum_value,
 		pg_catalog.obj_description(pt.oid) as enum_comment
 	FROM pg_enum as pe
-		LEFT JOIN pg_type as pt ON pe.enumtypid = pt.oid
-		LEFT JOIN pg_namespace as pn ON pt.typnamespace = pn.oid
-	WHERE pn.nspname NOT IN (%s)
-	  AND pn.nspname NOT LIKE 'pg_temp%%'
-	  AND pn.nspname NOT LIKE 'pg_toast%%'
-	ORDER BY pn.nspname, pt.typname, pe.enumsortorder;`
+	LEFT JOIN pg_type as pt ON pe.enumtypid = pt.oid
+	LEFT JOIN pg_namespace as pn ON pt.typnamespace = pn.oid
+WHERE pn.nspname NOT IN (%s)
+  AND pn.nspname NOT LIKE 'pg_temp%%'
+  AND pn.nspname NOT LIKE 'pg_toast%%'
+  AND pg_catalog.has_schema_privilege(pn.oid, 'USAGE')
+ORDER BY pn.nspname, pt.typname, pe.enumsortorder;`
 	rows, err := txn.Query(fmt.Sprintf(query, pgparser.SystemSchemaWhereClause))
 	if err != nil {
 		return nil, err
@@ -1260,6 +1271,7 @@ func getSequences(txn *sql.Tx, tableOidMap map[int]*db.TableKeyWithColumns, exte
 	WHERE schemaname NOT IN (%s)
 	  AND schemaname NOT LIKE 'pg_temp%%%%'
 	  AND schemaname NOT LIKE 'pg_toast%%%%'
+	  AND pg_catalog.has_schema_privilege(schemaname, 'USAGE')
 	ORDER BY schemaname, sequencename;`, pgparser.SystemSchemaWhereClause)
 	rows, err := txn.Query(query)
 	if err != nil {
@@ -1371,7 +1383,7 @@ func getTriggers(txn *sql.Tx, extensionDepend map[int]bool) (map[db.TableKey][]*
 	FROM pg_trigger as pt
 		LEFT JOIN pg_class as pc ON pc.oid = pt.tgrelid
 		LEFT JOIN pg_namespace as pn ON pn.oid = pc.relnamespace
-	WHERE pn.nspname NOT IN (%s) AND pt.tgisinternal = false;`
+	WHERE pn.nspname NOT IN (%s) AND pg_catalog.has_schema_privilege(pn.oid, 'USAGE') AND pt.tgisinternal = false;`
 	rows, err := txn.Query(fmt.Sprintf(query, pgparser.SystemSchemaWhereClause))
 	if err != nil {
 		return nil, err
@@ -1545,6 +1557,7 @@ JOIN pg_am am ON i.relam = am.oid` + fmt.Sprintf(`
 WHERE n.nspname NOT IN (%s)
   AND n.nspname NOT LIKE 'pg_temp%%'
   AND n.nspname NOT LIKE 'pg_toast%%'
+  AND pg_catalog.has_schema_privilege(n.oid, 'USAGE')
 ORDER BY n.nspname, t.relname, i.relname;`, pgparser.SystemSchemaWhereClause)
 
 // parseIndexOptions parses PostgreSQL indoption int2vector to extract sort order information
@@ -1665,10 +1678,11 @@ select
 from pg_proc p
 	left join pg_depend d on p.oid = d.objid
 	left join pg_type pt on d.refobjid = pt.oid
-	left join pg_namespace n on p.pronamespace = n.oid` + fmt.Sprintf(`
+left join pg_namespace n on p.pronamespace = n.oid` + fmt.Sprintf(`
 where n.nspname not in (%s)
   AND n.nspname NOT LIKE 'pg_temp%%'
   AND n.nspname NOT LIKE 'pg_toast%%'
+  AND pg_catalog.has_schema_privilege(n.oid, 'USAGE')
   AND pt.typrelid IS NOT NULL
 `, pgparser.SystemSchemaWhereClause)
 
@@ -1711,6 +1725,7 @@ left join pg_type t on t.oid = p.prorettype ` + fmt.Sprintf(`
 where n.nspname not in (%s)
   AND n.nspname NOT LIKE 'pg_temp%%'
   AND n.nspname NOT LIKE 'pg_toast%%'
+  AND pg_catalog.has_schema_privilege(n.oid, 'USAGE')
 order by function_schema, function_name;`, pgparser.SystemSchemaWhereClause)
 
 // getFunctions gets all functions of a database.
