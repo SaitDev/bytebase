@@ -210,11 +210,15 @@ export const usePolicyV1Store = defineStore("policy_v1", () => {
       state.policyMapByName.set(policy.name, policy);
       return policy;
     } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        // To prevent unnecessary requests, cache empty policies if not found.
-        const emptyPolicy = create(PolicySchema, { name });
-        state.policyMapByName.set(name, emptyPolicy);
+      const connectError = ConnectError.from(error);
+      // Cache an empty policy for not found or unexpected errors to avoid repeated
+      // requests and UI crashes when the API endpoint is unavailable.
+      if (connectError.code !== Code.NotFound) {
+        console.debug("failed to fetch policy, fallback to empty", connectError);
       }
+      const emptyPolicy = create(PolicySchema, { name });
+      state.policyMapByName.set(name, emptyPolicy);
+      return emptyPolicy;
     }
   };
 
