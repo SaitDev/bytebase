@@ -1220,12 +1220,18 @@ func (q *querySpanExtractor) findTableSchema(schemaName string, tableName string
 			Database: &q.defaultDatabase,
 		}
 	}
-	searcher := dbMetadata.NewSearcher(schemaName)
-	tableSchemaName, table := searcher.SearchTable(tableName)
-	viewSchemaName, view := searcher.SearchView(tableName)
-	materializedViewSchemaName, materializedView := searcher.SearchMaterializedView(tableName)
-	foreignTableSchemaName, foreignTable := searcher.SearchExternalTable(tableName)
-	sequenceSchemaName, sequence := searcher.SearchSequence(tableName)
+
+	// Respect the current search path (which includes the user-selected schema).
+	searchPath := q.searchPath
+	if schemaName != "" {
+		searchPath = []string{schemaName}
+	}
+
+	tableSchemaName, table := dbMetadata.SearchTable(searchPath, tableName)
+	viewSchemaName, view := dbMetadata.SearchView(searchPath, tableName)
+	materializedViewSchemaName, materializedView := dbMetadata.SearchMaterializedView(searchPath, tableName)
+	foreignTableSchemaName, foreignTable := dbMetadata.SearchExternalTable(searchPath, tableName)
+	sequenceSchemaName, sequence := dbMetadata.SearchSequence(searchPath, tableName)
 
 	if table == nil && view == nil && foreignTable == nil && materializedView == nil && sequence == nil {
 		return nil, &parsererror.ResourceNotFoundError{

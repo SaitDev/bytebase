@@ -1768,6 +1768,66 @@
           table: t
           column: ""
     predicatecolumns: []
+- description: Schema scoped query uses selected schema
+  statement: SELECT * FROM t
+  defaultDatabase: db
+  schema: repdb
+  metadata: |-
+    {
+      "name":  "db",
+      "searchPath": "public",
+      "schemas":  [
+        {
+          "name": "public"
+        },
+        {
+          "name": "repdb",
+          "tables":  [
+            {
+              "name":  "t",
+              "columns":  [
+                {
+                  "name":  "a"
+                },
+                {
+                  "name":  "b"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  querySpan:
+    type: 1
+    results:
+        - name: a
+          sourcecolumns:
+            - server: ""
+              database: db
+              schema: repdb
+              table: t
+              column: a
+          isplainfield: true
+          sourcefieldpaths: []
+          selectasterisk: false
+        - name: b
+          sourcecolumns:
+            - server: ""
+              database: db
+              schema: repdb
+              table: t
+              column: b
+          isplainfield: true
+          sourcefieldpaths: []
+          selectasterisk: false
+    sourcecolumns:
+        - server: ""
+          database: db
+          schema: repdb
+          table: t
+          column: ""
+    predicatecolumns: []
 - description: Referenced table fields by different format
   statement: SELECT a, t.b, public.t.c, db.public.t.d FROM t;
   defaultDatabase: db

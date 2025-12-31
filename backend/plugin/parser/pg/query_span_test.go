@@ -21,6 +21,7 @@ func TestGetQuerySpan(t *testing.T) {
 		Description     string `yaml:"description,omitempty"`
 		Statement       string `yaml:"statement,omitempty"`
 		DefaultDatabase string `yaml:"defaultDatabase,omitempty"`
+		Schema          string `yaml:"schema,omitempty"`
 		// Metadata is the protojson encoded storepb.DatabaseSchemaMetadata,
 		// if it's empty, we will use the defaultDatabaseMetadata.
 		Metadata  string              `yaml:"metadata,omitempty"`
@@ -53,7 +54,7 @@ func TestGetQuerySpan(t *testing.T) {
 			result, err := GetQuerySpan(context.TODO(), base.GetQuerySpanContext{
 				GetDatabaseMetadataFunc: databaseMetadataGetter,
 				ListDatabaseNamesFunc:   databaseNameLister,
-			}, tc.Statement, tc.DefaultDatabase, "", false)
+			}, tc.Statement, tc.DefaultDatabase, tc.Schema, false)
 			a.NoErrorf(err, "idx: %d statement: %s", i, tc.Statement)
 			resultYaml := result.ToYaml()
 			if record {
